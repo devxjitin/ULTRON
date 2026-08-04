@@ -20,8 +20,6 @@ from config import (
     CAMERA_STATE,
     CHANNELS,
     CHUNK,
-    CONTINUOUS_TASK_POLL_SECONDS,
-    CONTINUOUS_TASK_STATE,
     FORMAT,
     MIC_GAIN,
     MODEL,
@@ -45,14 +43,6 @@ from control.mouse_keyboard import configure_pyautogui, enable_windows_dpi_aware
 from memory.db import build_memory_context, initialize_memory_database, save_conversation, utc_now
 from screen.capture import capture_combined_frame, capture_screen_frame
 from tools import TOOLS, dispatch_tool
-
-
-def build_continuous_task_nudge(description: str) -> str:
-    return (
-        "[CONTINUOUS TASK NUDGE] Check on and continue the active task: "
-        f'"{description}". Follow the CONTINUOUS TASK BEHAVIOR rules in your '
-        "system instructions."
-    )
 
 
 def apply_mic_gain(data: bytes, gain: float = MIC_GAIN) -> bytes:
@@ -173,10 +163,7 @@ COMPUTER CONTROL BEHAVIOR
 - Prefer direct GUI tools for visible UI interaction. Use terminal tools for
   command-line, scripting, system-management, installation, or file operations.
 - Do not interact with the computer unless the user asks you to perform an
-  action. Continuing an ongoing task the user explicitly started with
-  start_continuous_task counts as being asked — see CONTINUOUS TASK BEHAVIOR
-  below. Never take computer-control actions on your own initiative outside
-  of an active continuous task.
+  action. Never take computer-control actions on your own initiative.
 - To switch to a different already-open application (e.g. "switch to
   WhatsApp", "go back to the browser"), PREFER focus_window with a partial
   title match over clicking a taskbar icon by guessed coordinates — it's far
@@ -206,73 +193,9 @@ TERMINAL BEHAVIOR
 - Report exit_code, stdout, and stderr accurately. Never falsely claim success.
 
 TURN-TAKING BEHAVIOR
-- Barge-in is enabled: if the user starts speaking while you're mid-response,
-  you stop immediately (even mid-sentence) and their new speech becomes the
-  next turn. This is intentional, not an error -- never resume or repeat the
-  interrupted response afterward; just handle what they say now.
-- A one-word "stop"/"stop it"/"cancel" (or clear equivalent) always wins over
-  whatever you were doing, including a continuous task in progress: stop
-  talking, stop taking further actions for that task, and call
-  stop_continuous_task right away if one is active. Acknowledge briefly, then
-  go back to listening.
-- Otherwise, once you finish speaking, go back to listening for the next
-  instruction.
-
-CONTINUOUS TASK BEHAVIOR
-- Default to treating every request as a short task: do it once, right now,
-  with the normal tools, and you're done. Never call start_continuous_task
-  on your own judgment call, even if the task sounds like it could run for a
-  while (a slow download, a long scan, a multi-step process) — long-running
-  and background-and-ongoing are not the same thing; only the latter belongs
-  in a continuous task.
-- Only treat a request as long-running (continuous task) when the user has
-  clearly and explicitly confirmed they want ongoing, unattended behavior —
-  something with no natural end you'd otherwise re-prompt them for (e.g.
-  "keep replying to them on WhatsApp, whatever they say", "keep an eye on
-  this download and tell me when it's done", "keep translating whatever they
-  type"). Wording like "until I tell you to stop", "keep doing X", or
-  "whenever X happens, do Y" already counts as that confirmation — proceed
-  straight to start_continuous_task without asking again.
-- If it's genuinely ambiguous whether they want it done once or kept running
-  in the background, ask first — a short, direct question such as "Should I
-  keep doing this until you tell me to stop, or just do it once now?" — and
-  wait for their answer. Only call start_continuous_task if they confirm
-  ongoing; otherwise proceed as a normal short task.
-- Once confirmed (explicitly in the request or via your question), call
-  start_continuous_task with a short description of the task and how to
-  handle it.
-- Once started, you receive an internal message starting with "[CONTINUOUS
-  TASK NUDGE]" every few seconds telling you to check on and continue the
-  task. This was not spoken by the user — it's the mechanism that lets you
-  keep going without them saying anything further. Use whatever tools the
-  task needs, including full GUI control (mouse, keyboard, clicking,
-  scrolling, typing) on the relevant already-open app or window (e.g. an
-  open WhatsApp chat), screen/camera vision to see new content, and
-  terminal tools if relevant.
-- Only act when there is something new to act on (e.g. a new message
-  arrived). If a nudge finds nothing new, do nothing that turn — no filler
-  action, no filler message, no re-sending the same reply. Silence between
-  real events is normal and expected.
-- Speak out loud only when it's useful to the user (e.g. summarizing what
-  happened, flagging something that needs their attention); routine
-  in-task actions like sending a reply in a chat do not need to be narrated
-  every time.
-- Call stop_continuous_task yourself as soon as the task is clearly
-  finished, there's nothing left to do, or the user says something that
-  implies they want it stopped. Never start a new continuous task without
-  an explicit instruction to do so.
-- The user can say "stop" at any moment while this is running, including
-  mid-action or mid-sentence of yours. Treat that exactly per TURN-TAKING
-  BEHAVIOR above: stop immediately, do not queue or finish the action you
-  were mid-way through, call stop_continuous_task now, and do not start it
-  again without a fresh explicit instruction.
-- The same hard limits as normal apply and are not loosened by being in a
-  continuous task: do not do anything destructive or hard to reverse
-  (deleting/overwriting files, installing/uninstalling software, changing
-  settings), and do not do anything with real-world/financial effect beyond
-  what the task explicitly asked for (e.g. a "keep chatting on WhatsApp"
-  task means sending chat messages, not making purchases or agreeing to
-  anything binding on the user's behalf without their instruction).
+- Barge-in is disabled: finish speaking your full response before the user's
+  next turn is processed. Do not stop mid-sentence.
+- Once you finish speaking, go back to listening for the next instruction.
 
 SCREEN VISION BEHAVIOR
 - You receive a refreshed image of the selected Windows screen at up to one frame
@@ -333,13 +256,10 @@ CURRENT PERSISTENT CONTEXT
             }
         },
         "realtime_input_config": {
-            # Barge-in enabled: detected user speech interrupts Ultron's
-            # current spoken response immediately (see interrupt_playback()
-            # below, triggered by content.interrupted). This is what lets
-            # "stop" actually stop it right away -- including mid-sentence,
-            # and including while it's in the middle of a continuous task --
-            # instead of waiting for the current response to finish first.
-            "activity_handling": "START_OF_ACTIVITY_INTERRUPTS",
+            # Barge-in disabled: detected user speech no longer interrupts
+            # the model's current spoken response. Ultron finishes speaking,
+            # then the next turn is processed and it listens again.
+            "activity_handling": "NO_INTERRUPTION",
             "automatic_activity_detection": {
                 "disabled": False,
                 # Default start-of-speech sensitivity requires noticeably
@@ -412,18 +332,14 @@ CURRENT PERSISTENT CONTEXT
             user_transcript = ""
             assistant_transcript = ""
 
-            # Prevents the continuous-task monitor from sending an
-            # overlapping nudge while the previous one is still in flight.
-            task_turn_in_progress = False
-
             try:
                 async with client.aio.live.connect(
                     model=MODEL, config=session_config
                 ) as session:
                     print("Connected. Speak normally. Press Ctrl+C to stop.")
                     print(
-                        "VOICE INTERRUPTION ENABLED: say 'stop' at any time, "
-                        "even mid-sentence or mid-task, to stop it immediately."
+                        "VOICE INTERRUPTION DISABLED: Ultron finishes speaking "
+                        "before listening again."
                     )
                     print("SEPARATE CMD AND POWERSHELL TOOLS ARE ENABLED.")
                     print("MOUSE AND KEYBOARD CONTROL IS ENABLED.")
@@ -445,11 +361,6 @@ CURRENT PERSISTENT CONTEXT
                         f"{CAMERA_FPS:.1f} FPS. No preview window is shown."
                     )
                     print("Say 'turn on the camera' to switch to webcam vision.")
-                    print(
-                        "CONTINUOUS TASK MODE: say things like 'keep replying "
-                        "to them on WhatsApp' to start an ongoing task; say "
-                        "'stop' to end it."
-                    )
                     print(f"Default working directory: {DEFAULT_WORKING_DIRECTORY}")
                     print(f"Persistent memory database: {MEMORY_DB}\n")
 
@@ -569,47 +480,6 @@ CURRENT PERSISTENT CONTEXT
                             elapsed = time.monotonic() - started_at
                             await asyncio.sleep(max(0.0, frame_interval - elapsed))
 
-                    async def continuous_task_monitor() -> None:
-                        nonlocal task_turn_in_progress
-
-                        while True:
-                            await asyncio.sleep(CONTINUOUS_TASK_POLL_SECONDS)
-
-                            if not CONTINUOUS_TASK_STATE["active"]:
-                                continue
-                            # Don't nudge while a tool is already running,
-                            # mid-turn audio is being sent, or the previous
-                            # task nudge hasn't finished yet.
-                            if pause_mic_for_tool.is_set() or task_turn_in_progress:
-                                continue
-
-                            task_turn_in_progress = True
-                            description = CONTINUOUS_TASK_STATE["description"]
-
-                            try:
-                                async with send_lock:
-                                    await session.send_client_content(
-                                        turns=types.Content(
-                                            role="user",
-                                            parts=[
-                                                types.Part.from_text(
-                                                    text=build_continuous_task_nudge(
-                                                        description
-                                                    )
-                                                )
-                                            ],
-                                        ),
-                                        turn_complete=True,
-                                    )
-                            except asyncio.CancelledError:
-                                raise
-                            except Exception as error:
-                                task_turn_in_progress = False
-                                print(
-                                    "\n[Continuous task nudge error] "
-                                    f"{type(error).__name__}: {error}"
-                                )
-
                     async def play_audio() -> None:
                         while True:
                             audio_data = await playback_queue.get()
@@ -725,7 +595,6 @@ CURRENT PERSISTENT CONTEXT
                     async def receive_audio_tools_and_transcripts() -> None:
                         nonlocal user_transcript, assistant_transcript
                         nonlocal latest_resumption_handle
-                        nonlocal task_turn_in_progress
 
                         # session.receive() finishes after a model turn, so
                         # re-enter it.
@@ -804,7 +673,6 @@ CURRENT PERSISTENT CONTEXT
 
                                 if content.turn_complete:
                                     await playback_queue.join()
-                                    task_turn_in_progress = False
 
                                     completed_user_text = user_transcript.strip()
                                     completed_assistant_text = (
@@ -840,10 +708,6 @@ CURRENT PERSISTENT CONTEXT
                         asyncio.create_task(
                             receive_audio_tools_and_transcripts(),
                             name="live-receiver",
-                        ),
-                        asyncio.create_task(
-                            continuous_task_monitor(),
-                            name="continuous-task-monitor",
                         ),
                     ]
 

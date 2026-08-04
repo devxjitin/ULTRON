@@ -39,11 +39,6 @@ from memory.db import (
     search_memory,
 )
 from camera.capture import get_camera_capture_status, set_camera_capture
-from continuous_task.state import (
-    get_continuous_task_status,
-    start_continuous_task,
-    stop_continuous_task,
-)
 from screen.capture import get_screen_capture_status, set_screen_capture
 from terminal.shell import run_cmd_command, run_powershell_command
 from config import DEFAULT_COMMAND_TIMEOUT_SECONDS
@@ -284,18 +279,6 @@ def _get_screen_capture_status(arguments: dict[str, Any]) -> dict[str, Any]:
     return get_screen_capture_status()
 
 
-def _start_continuous_task(arguments: dict[str, Any]) -> dict[str, Any]:
-    return start_continuous_task(description=arguments.get("description", ""))
-
-
-def _stop_continuous_task(arguments: dict[str, Any]) -> dict[str, Any]:
-    return stop_continuous_task()
-
-
-def _get_continuous_task_status(arguments: dict[str, Any]) -> dict[str, Any]:
-    return get_continuous_task_status()
-
-
 def _remember_memory(arguments: dict[str, Any]) -> dict[str, Any]:
     return remember_memory(
         memory_key=arguments.get("memory_key", ""),
@@ -334,9 +317,6 @@ def _recent_terminal_history(arguments: dict[str, Any]) -> dict[str, Any]:
 SYNC_HANDLERS: dict[str, Callable[[dict[str, Any]], dict[str, Any]]] = {
     "set_screen_capture": _set_screen_capture,
     "get_screen_capture_status": _get_screen_capture_status,
-    "start_continuous_task": _start_continuous_task,
-    "stop_continuous_task": _stop_continuous_task,
-    "get_continuous_task_status": _get_continuous_task_status,
     "remember_memory": _remember_memory,
     "search_memory": _search_memory,
     "list_memories": _list_memories,

@@ -46,12 +46,6 @@ computer, with sane guardrails, so you can get things done by just asking.
   configurable timeouts, so it can run real commands and report back exactly
   what happened.
 
-**Autonomy, on request**
-- A continuous-task mode: ask it to keep doing something on its own (for
-  example, "keep an eye on this and let me know when it changes") and it
-  will check in and act periodically until the task is done or you tell it
-  to stop. It never starts this on its own — only when you explicitly ask.
-
 ## Requirements
 
 - Windows 10 or 11

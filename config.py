@@ -127,20 +127,6 @@ CAMERA_PIP_MAX_WIDTH = 320
 CAMERA_PIP_MARGIN = 16
 
 # =========================================================
-# CONTINUOUS TASK MODE
-# =========================================================
-
-# Explicit, user-started autonomy: when the user asks Ultron to keep doing
-# something on its own ("keep replying to them on WhatsApp, whatever they
-# say"), it calls start_continuous_task and then gets a nudge every
-# CONTINUOUS_TASK_POLL_SECONDS to check on and continue that task, without
-# needing the user to re-prompt it each time. Runs only while a task is
-# active, and only until stop_continuous_task is called (task finished, user
-# said stop, or nothing new to act on). Unlike a background/idle trigger,
-# this never starts itself — the user has to explicitly ask for it.
-CONTINUOUS_TASK_POLL_SECONDS = 5.0
-
-# =========================================================
 # GUI AUTOMATION
 # =========================================================
 
@@ -198,8 +184,3 @@ CAMERA_STATE: dict[str, Any] = {
 # Tool-call IDs can occasionally be repeated by a streaming session.
 PROCESSED_TOOL_CALL_CACHE_SIZE = 200
 processed_tool_calls: dict[str, dict[str, Any]] = {}
-
-CONTINUOUS_TASK_STATE: dict[str, Any] = {
-    "active": False,
-    "description": "",
-}

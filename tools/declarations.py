@@ -473,51 +473,6 @@ TOOLS = [
                 "parameters": {"type": "object", "properties": {}},
             },
             {
-                "name": "start_continuous_task",
-                "description": (
-                    "Start continuous task mode for an ongoing task the user "
-                    "just asked for, e.g. 'keep replying to them on WhatsApp, "
-                    "whatever they say' or 'keep monitoring this download'. "
-                    "Once started, you receive a periodic nudge to check on "
-                    "and continue the task on your own, without the user "
-                    "needing to re-prompt you each time. Only call this for "
-                    "an explicit, ongoing instruction — never on your own "
-                    "initiative."
-                ),
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "description": {
-                            "type": "string",
-                            "description": (
-                                "A short summary of the ongoing task and how "
-                                "to keep handling it, e.g. 'Reply naturally "
-                                "to whatever the person on the other end of "
-                                "the open WhatsApp chat says next.'"
-                            ),
-                        }
-                    },
-                    "required": ["description"],
-                },
-            },
-            {
-                "name": "stop_continuous_task",
-                "description": (
-                    "Stop continuous task mode. Call this yourself once the "
-                    "task is clearly finished or there is nothing left to do, "
-                    "or whenever the user explicitly asks you to stop."
-                ),
-                "parameters": {"type": "object", "properties": {}},
-            },
-            {
-                "name": "get_continuous_task_status",
-                "description": (
-                    "Return whether continuous task mode is active and, if so, "
-                    "its current task description."
-                ),
-                "parameters": {"type": "object", "properties": {}},
-            },
-            {
                 "name": "remember_memory",
                 "description": (
                     "Save or update a durable memory when the user explicitly asks "
