@@ -96,11 +96,9 @@ class _SessionGoAway(Exception):
 
 
 async def main() -> None:
-    api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+    api_key = os.getenv("ASSISTANT_API_KEY")
     if not api_key:
-        raise RuntimeError(
-            "Set GEMINI_API_KEY or GOOGLE_API_KEY before running the program."
-        )
+        raise RuntimeError("Set ASSISTANT_API_KEY before running the program.")
 
     if os.name != "nt":
         raise RuntimeError("This program is intended for Windows.")
@@ -376,8 +374,8 @@ CURRENT PERSISTENT CONTEXT
             speaker_lock = asyncio.Lock()
 
             # The microphone is paused only while a local tool is executing.
-            # It stays active while Gemini speaks so the user can interrupt
-            # by speaking.
+            # It stays active while the assistant speaks so the user can
+            # interrupt by speaking.
             pause_mic_for_tool = asyncio.Event()
             playback_queue: asyncio.Queue[bytes] = asyncio.Queue()
 
@@ -843,7 +841,7 @@ CURRENT PERSISTENT CONTEXT
 
             return latest_resumption_handle
 
-        print("Connecting to Gemini Live API...")
+        print("Connecting...")
 
         resumption_handle: str | None = None
         reconnect_attempt = 0

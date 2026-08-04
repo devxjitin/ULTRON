@@ -1,4 +1,4 @@
-"""Gemini function-declaration schema for every tool Ultron can call."""
+"""Function-declaration schema for every tool Ultron can call."""
 
 TOOLS = [
     {

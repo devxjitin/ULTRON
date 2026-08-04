@@ -1,7 +1,7 @@
 """Webcam capture used to give Ultron webcam vision (no GUI/preview window).
 
 Frames are grabbed with OpenCV and JPEG-encoded the same way screen frames
-are, then streamed to Gemini Live as ordinary video input. There is no
+are, then streamed live as ordinary video input. There is no
 on-screen preview: capture happens headlessly in the background exactly
 like screen sharing does.
 """

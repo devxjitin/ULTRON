@@ -8,7 +8,7 @@ from typing import Any
 import pyaudio
 
 # =========================================================
-# GEMINI MODELS
+# AI MODELS
 # =========================================================
 
 MODEL = "gemini-3.1-flash-live-preview"
@@ -76,7 +76,7 @@ MAX_RECENT_TURNS_IN_PROMPT = 10
 # SCREEN CAPTURE
 # =========================================================
 
-# Gemini Live supports video as image frames at a maximum of 1 FPS. Both
+# The realtime API supports video as image frames at a maximum of 1 FPS. Both
 # screen and camera vision are on by default (see
 # CAMERA_CAPTURE_ENABLED_AT_START below) -- Ultron should be able to see
 # through both the moment it starts, without needing a voice command first.
@@ -180,7 +180,7 @@ SCREEN_STATE: dict[str, Any] = {
     "last_error": None,
 }
 
-# Screen vision and camera vision share the single Gemini Live video input.
+# Screen vision and camera vision share the single realtime video input.
 # Both can be "enabled" at once -- see send_video_frames in
 # voice/assistant.py, which composites the camera as a picture-in-picture
 # thumbnail onto the screen frame when that happens, instead of trying to

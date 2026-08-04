@@ -241,7 +241,7 @@ def capture_combined_frame(camera_image: Image.Image) -> tuple[bytes, dict[str, 
     """Like capture_screen_frame, but pastes `camera_image` as a
     picture-in-picture thumbnail in the bottom-right corner first. Used when
     screen and camera vision are both enabled, so only one video frame (not
-    two unrelated ones) is sent to Gemini Live per tick.
+    two unrelated ones) is sent per tick.
     """
     from config import CAMERA_PIP_MARGIN, CAMERA_PIP_MAX_WIDTH
 

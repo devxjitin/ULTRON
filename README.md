@@ -1,9 +1,9 @@
 # Ultron
 
-Ultron is a voice-controlled desktop assistant for Windows, built on Google's
-Gemini Live API. You talk to it naturally, and it talks back — while seeing
-your screen or webcam, controlling your mouse and keyboard, running terminal
-commands, and remembering things across sessions.
+Ultron is a voice-controlled desktop assistant for Windows, powered by a
+real-time multimodal AI model. You talk to it naturally, and it talks back —
+while seeing your screen or webcam, controlling your mouse and keyboard,
+running terminal commands, and remembering things across sessions.
 
 It's designed for one thing: give a voice assistant real hands on your
 computer, with sane guardrails, so you can get things done by just asking.
@@ -56,7 +56,7 @@ computer, with sane guardrails, so you can get things done by just asking.
 
 - Windows 10 or 11
 - Python 3.11+
-- A Gemini API key ([Google AI Studio](https://aistudio.google.com/))
+- An API key for the underlying AI model provider
 - A working microphone and speakers/headphones
 - A webcam, if you want camera vision (optional — screen sharing works
   without one)
@@ -72,7 +72,7 @@ computer, with sane guardrails, so you can get things done by just asking.
 2. Set your API key for the current session:
 
    ```powershell
-   set GEMINI_API_KEY=your_api_key_here
+   set ASSISTANT_API_KEY=your_api_key_here
    ```
 
 3. Run it:

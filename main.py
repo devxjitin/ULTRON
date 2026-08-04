@@ -1,19 +1,19 @@
 """
-Ultron: a Gemini Live voice assistant for Windows with:
+Ultron: a real-time voice assistant for Windows with:
 - Continuous two-way voice conversation with voice barge-in interruption
 - Dedicated CMD and PowerShell tools
 - Mouse movement, click, double-click, drag, and scrolling
 - Keyboard typing, key presses, and hotkeys
 - Persistent SQLite long-term memory
 - Automatic conversation transcript storage
-- Continuous Windows screen vision streamed to Gemini Live
+- Continuous Windows screen vision streamed live
 - Voice-controlled screen-sharing enable/disable and monitor selection
 
 Install dependencies:
     pip install -r requirements.txt
 
 Set your API key before running:
-    set GEMINI_API_KEY=your_api_key_here
+    set ASSISTANT_API_KEY=your_api_key_here
 
 WARNING:
 This program gives the model direct access to your Windows shell, mouse, and

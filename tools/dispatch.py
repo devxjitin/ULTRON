@@ -1,4 +1,4 @@
-"""Routes Gemini tool calls to the concrete Python implementation."""
+"""Routes tool calls to the concrete Python implementation."""
 
 from __future__ import annotations
 

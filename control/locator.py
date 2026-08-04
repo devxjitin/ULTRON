@@ -32,11 +32,9 @@ def _get_locator_client() -> genai.Client:
     """
     global _LOCATOR_CLIENT
     if _LOCATOR_CLIENT is None:
-        api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+        api_key = os.getenv("ASSISTANT_API_KEY")
         if not api_key:
-            raise RuntimeError(
-                "Set GEMINI_API_KEY or GOOGLE_API_KEY before running the program."
-            )
+            raise RuntimeError("Set ASSISTANT_API_KEY before running the program.")
         _LOCATOR_CLIENT = genai.Client(api_key=api_key)
     return _LOCATOR_CLIENT
 
@@ -131,7 +129,6 @@ def locate_target_on_screen(description: str) -> dict[str, Any]:
         "found": bool(parsed.get("found", True)),
         "x": normalized_x,
         "y": normalized_y,
-        "model": COORDINATE_MODEL,
         "frame_size": frame_size,
     }
 
