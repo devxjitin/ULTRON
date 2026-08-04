@@ -206,9 +206,17 @@ TERMINAL BEHAVIOR
 - Report exit_code, stdout, and stderr accurately. Never falsely claim success.
 
 TURN-TAKING BEHAVIOR
-- Barge-in is disabled: finish speaking your full response before the user's
-  next turn is processed. Do not stop mid-sentence.
-- Once you finish speaking, go back to listening for the next instruction.
+- Barge-in is enabled: if the user starts speaking while you're mid-response,
+  you stop immediately (even mid-sentence) and their new speech becomes the
+  next turn. This is intentional, not an error -- never resume or repeat the
+  interrupted response afterward; just handle what they say now.
+- A one-word "stop"/"stop it"/"cancel" (or clear equivalent) always wins over
+  whatever you were doing, including a continuous task in progress: stop
+  talking, stop taking further actions for that task, and call
+  stop_continuous_task right away if one is active. Acknowledge briefly, then
+  go back to listening.
+- Otherwise, once you finish speaking, go back to listening for the next
+  instruction.
 
 CONTINUOUS TASK BEHAVIOR
 - This is explicit, user-started autonomy only — it never begins on its own.
@@ -236,9 +244,13 @@ CONTINUOUS TASK BEHAVIOR
   every time.
 - Call stop_continuous_task yourself as soon as the task is clearly
   finished, there's nothing left to do, or the user says something that
-  implies they want it stopped. Also stop it immediately if the user
-  explicitly asks you to stop, and never start a new continuous task
-  without an explicit instruction to do so.
+  implies they want it stopped. Never start a new continuous task without
+  an explicit instruction to do so.
+- The user can say "stop" at any moment while this is running, including
+  mid-action or mid-sentence of yours. Treat that exactly per TURN-TAKING
+  BEHAVIOR above: stop immediately, do not queue or finish the action you
+  were mid-way through, call stop_continuous_task now, and do not start it
+  again without a fresh explicit instruction.
 - The same hard limits as normal apply and are not loosened by being in a
   continuous task: do not do anything destructive or hard to reverse
   (deleting/overwriting files, installing/uninstalling software, changing
@@ -306,10 +318,13 @@ CURRENT PERSISTENT CONTEXT
             }
         },
         "realtime_input_config": {
-            # Barge-in disabled: detected user speech no longer interrupts
-            # the model's current spoken response. Ultron finishes speaking,
-            # then the next turn is processed and it listens again.
-            "activity_handling": "NO_INTERRUPTION",
+            # Barge-in enabled: detected user speech interrupts Ultron's
+            # current spoken response immediately (see interrupt_playback()
+            # below, triggered by content.interrupted). This is what lets
+            # "stop" actually stop it right away -- including mid-sentence,
+            # and including while it's in the middle of a continuous task --
+            # instead of waiting for the current response to finish first.
+            "activity_handling": "START_OF_ACTIVITY_INTERRUPTS",
             "automatic_activity_detection": {
                 "disabled": False,
                 # Default start-of-speech sensitivity requires noticeably
@@ -392,8 +407,8 @@ CURRENT PERSISTENT CONTEXT
                 ) as session:
                     print("Connected. Speak normally. Press Ctrl+C to stop.")
                     print(
-                        "VOICE INTERRUPTION DISABLED: Ultron finishes speaking "
-                        "before listening again."
+                        "VOICE INTERRUPTION ENABLED: say 'stop' at any time, "
+                        "even mid-sentence or mid-task, to stop it immediately."
                     )
                     print("SEPARATE CMD AND POWERSHELL TOOLS ARE ENABLED.")
                     print("MOUSE AND KEYBOARD CONTROL IS ENABLED.")
