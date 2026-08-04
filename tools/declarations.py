@@ -449,12 +449,11 @@ TOOLS = [
                 "description": (
                     "Enable or disable webcam vision and optionally select which "
                     "camera device to use. There is no visible preview window; "
-                    "frames are only sent to you. Enabling the camera "
-                    "automatically disables screen vision, and enabling screen "
-                    "vision automatically disables the camera, since only one "
-                    "video source can be shared at a time. Only call this when "
-                    "the user explicitly asks to turn the camera on/off or "
-                    "switch camera devices."
+                    "frames are only sent to you. Screen and camera vision can "
+                    "both be on at once -- when they are, the camera appears as "
+                    "a small picture-in-picture thumbnail on the screen frame. "
+                    "Only call this when the user explicitly asks to turn the "
+                    "camera on/off or switch camera devices."
                 ),
                 "parameters": {
                     "type": "object",

@@ -10,7 +10,6 @@ import pyautogui
 from PIL import Image, ImageDraw
 
 from config import (
-    CAMERA_STATE,
     CURSOR_MARKER_RADIUS,
     GRID_LABEL_COLOR,
     GRID_LINE_COLOR,
@@ -77,10 +76,6 @@ def set_screen_capture(
     SCREEN_STATE["enabled"] = is_enabled
     if is_enabled:
         SCREEN_STATE["last_error"] = None
-        # Screen vision and camera vision share the single Gemini Live video
-        # input, so turning one on turns the other off to avoid interleaving
-        # two unrelated video sources into the same stream.
-        CAMERA_STATE["enabled"] = False
 
     return {
         "status": "completed",
@@ -153,8 +148,13 @@ def draw_coordinate_grid(image: Image.Image) -> None:
         draw.text((2, py + 1), text, fill=GRID_LABEL_COLOR)
 
 
-def capture_screen_frame() -> tuple[bytes, dict[str, Any]]:
-    """Capture the selected Windows monitor and return JPEG bytes + metadata."""
+def capture_screen_image() -> tuple[Image.Image, dict[str, Any]]:
+    """Capture the selected Windows monitor and return a PIL image + metadata,
+    with the cursor marker drawn and downscaled to SCREEN_MAX_DIMENSION, but
+    *before* the coordinate grid overlay or JPEG encoding -- shared by
+    capture_screen_frame (screen-only) and capture_combined_frame (screen +
+    camera picture-in-picture), which each finish it differently.
+    """
     monitor_index = int(SCREEN_STATE["monitor_index"])
 
     with mss.mss() as screen_capture:
@@ -209,24 +209,64 @@ def capture_screen_frame() -> tuple[bytes, dict[str, Any]]:
             Image.Resampling.LANCZOS,
         )
 
-    if SHOW_COORDINATE_GRID:
-        draw_coordinate_grid(image)
-
-    output = BytesIO()
-    image.save(
-        output,
-        format="JPEG",
-        quality=SCREEN_JPEG_QUALITY,
-        optimize=True,
-    )
-    frame = output.getvalue()
-
     metadata = {
         "monitor_index": monitor_index,
         "original_width": original_width,
         "original_height": original_height,
+    }
+    return image, metadata
+
+
+def _encode_screen_image(image: Image.Image, metadata: dict[str, Any]) -> tuple[bytes, dict[str, Any]]:
+    output = BytesIO()
+    image.save(output, format="JPEG", quality=SCREEN_JPEG_QUALITY, optimize=True)
+    frame = output.getvalue()
+    return frame, {
+        **metadata,
         "sent_width": image.width,
         "sent_height": image.height,
         "jpeg_bytes": len(frame),
     }
-    return frame, metadata
+
+
+def capture_screen_frame() -> tuple[bytes, dict[str, Any]]:
+    """Capture the selected Windows monitor and return JPEG bytes + metadata."""
+    image, metadata = capture_screen_image()
+    if SHOW_COORDINATE_GRID:
+        draw_coordinate_grid(image)
+    return _encode_screen_image(image, metadata)
+
+
+def capture_combined_frame(camera_image: Image.Image) -> tuple[bytes, dict[str, Any]]:
+    """Like capture_screen_frame, but pastes `camera_image` as a
+    picture-in-picture thumbnail in the bottom-right corner first. Used when
+    screen and camera vision are both enabled, so only one video frame (not
+    two unrelated ones) is sent to Gemini Live per tick.
+    """
+    from config import CAMERA_PIP_MARGIN, CAMERA_PIP_MAX_WIDTH
+
+    image, metadata = capture_screen_image()
+
+    thumbnail = camera_image.copy()
+    if thumbnail.width > CAMERA_PIP_MAX_WIDTH:
+        scale = CAMERA_PIP_MAX_WIDTH / thumbnail.width
+        thumbnail = thumbnail.resize(
+            (CAMERA_PIP_MAX_WIDTH, max(1, int(thumbnail.height * scale))),
+            Image.Resampling.LANCZOS,
+        )
+
+    x = image.width - thumbnail.width - CAMERA_PIP_MARGIN
+    y = image.height - thumbnail.height - CAMERA_PIP_MARGIN
+    if x >= 0 and y >= 0:
+        draw = ImageDraw.Draw(image)
+        draw.rectangle(
+            (x - 2, y - 2, x + thumbnail.width + 2, y + thumbnail.height + 2),
+            outline=(255, 255, 255),
+            width=2,
+        )
+        image.paste(thumbnail, (x, y))
+
+    if SHOW_COORDINATE_GRID:
+        draw_coordinate_grid(image)
+
+    return _encode_screen_image(image, metadata)

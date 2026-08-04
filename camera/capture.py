@@ -21,7 +21,6 @@ from config import (
     CAMERA_MAX_DIMENSION,
     CAMERA_PROBE_INDEX_COUNT,
     CAMERA_STATE,
-    SCREEN_STATE,
 )
 from screen.capture import coerce_bool
 
@@ -117,9 +116,6 @@ def set_camera_capture(
         CAMERA_STATE["camera_index"] = target_index
         CAMERA_STATE["enabled"] = True
         CAMERA_STATE["last_error"] = None
-        # See the matching note in screen.capture.set_screen_capture: only
-        # one video source is streamed to Gemini Live at a time.
-        SCREEN_STATE["enabled"] = False
     else:
         CAMERA_STATE["enabled"] = False
         release_camera_handle()
@@ -151,8 +147,12 @@ def get_camera_capture_status() -> dict[str, Any]:
     }
 
 
-def capture_camera_frame() -> tuple[bytes, dict[str, Any]]:
-    """Grab one webcam frame and return JPEG bytes + metadata."""
+def capture_camera_image() -> tuple[Image.Image, dict[str, Any]]:
+    """Grab one webcam frame and return a PIL image + metadata, downscaled to
+    CAMERA_MAX_DIMENSION but not yet JPEG-encoded -- shared by
+    capture_camera_frame (camera-only) and screen.capture.capture_combined_frame
+    (screen + camera picture-in-picture), which each finish it differently.
+    """
     camera_index = int(CAMERA_STATE["camera_index"])
     handle = _get_camera_handle(camera_index)
 
@@ -171,16 +171,25 @@ def capture_camera_frame() -> tuple[bytes, dict[str, Any]]:
             Image.Resampling.LANCZOS,
         )
 
-    output = BytesIO()
-    image.save(output, format="JPEG", quality=CAMERA_JPEG_QUALITY, optimize=True)
-    encoded = output.getvalue()
-
     metadata = {
         "camera_index": camera_index,
         "original_width": original_width,
         "original_height": original_height,
+    }
+    return image, metadata
+
+
+def capture_camera_frame() -> tuple[bytes, dict[str, Any]]:
+    """Grab one webcam frame and return JPEG bytes + metadata."""
+    image, metadata = capture_camera_image()
+
+    output = BytesIO()
+    image.save(output, format="JPEG", quality=CAMERA_JPEG_QUALITY, optimize=True)
+    encoded = output.getvalue()
+
+    return encoded, {
+        **metadata,
         "sent_width": image.width,
         "sent_height": image.height,
         "jpeg_bytes": len(encoded),
     }
-    return encoded, metadata

@@ -76,11 +76,15 @@ MAX_RECENT_TURNS_IN_PROMPT = 10
 # SCREEN CAPTURE
 # =========================================================
 
-# Gemini Live supports video as image frames at a maximum of 1 FPS.
-# Off at start: the camera is the default video source (see
-# CAMERA_CAPTURE_ENABLED_AT_START below), and only one of the two can be
-# active at a time.
-SCREEN_CAPTURE_ENABLED_AT_START = False
+# Gemini Live supports video as image frames at a maximum of 1 FPS. Both
+# screen and camera vision are on by default (see
+# CAMERA_CAPTURE_ENABLED_AT_START below) -- Ultron should be able to see
+# through both the moment it starts, without needing a voice command first.
+# When both are enabled they share that single 1 FPS budget: the camera is
+# composited into the screen frame as a small picture-in-picture thumbnail
+# rather than sent as a second, unrelated video source (see
+# CAMERA_PIP_MAX_WIDTH below and voice/assistant.py's send_video_frames).
+SCREEN_CAPTURE_ENABLED_AT_START = True
 SCREEN_MONITOR_INDEX = 1  # 1 = primary monitor, 0 = all monitors combined
 SCREEN_FPS = 1.0
 SCREEN_MAX_DIMENSION = 1_600
@@ -115,6 +119,12 @@ CAMERA_JPEG_QUALITY = 80
 CAMERA_CAPTURE_RETRY_SECONDS = 2.0
 CAMERA_ERROR_LOG_INTERVAL_SECONDS = 10.0
 CAMERA_PROBE_INDEX_COUNT = 4  # how many device indexes to check for availability
+
+# Size (in pixels, width) of the camera picture-in-picture thumbnail pasted
+# into the bottom-right corner of the screen frame when both screen and
+# camera vision are enabled at once.
+CAMERA_PIP_MAX_WIDTH = 320
+CAMERA_PIP_MARGIN = 16
 
 # =========================================================
 # CONTINUOUS TASK MODE
@@ -170,9 +180,11 @@ SCREEN_STATE: dict[str, Any] = {
     "last_error": None,
 }
 
-# Screen vision and camera vision share the single Gemini Live video input,
-# so only one of SCREEN_STATE/CAMERA_STATE is ever "enabled" at a time; each
-# capture module clears the other's flag when it turns itself on.
+# Screen vision and camera vision share the single Gemini Live video input.
+# Both can be "enabled" at once -- see send_video_frames in
+# voice/assistant.py, which composites the camera as a picture-in-picture
+# thumbnail onto the screen frame when that happens, instead of trying to
+# send two unrelated video sources.
 CAMERA_STATE: dict[str, Any] = {
     "enabled": CAMERA_CAPTURE_ENABLED_AT_START,
     "camera_index": CAMERA_INDEX,

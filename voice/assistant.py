@@ -40,10 +40,10 @@ from config import (
     MEMORY_DB,
     processed_tool_calls,
 )
-from camera.capture import capture_camera_frame, release_camera_handle
+from camera.capture import capture_camera_frame, capture_camera_image, release_camera_handle
 from control.mouse_keyboard import configure_pyautogui, enable_windows_dpi_awareness
 from memory.db import build_memory_context, initialize_memory_database, save_conversation, utc_now
-from screen.capture import capture_screen_frame
+from screen.capture import capture_combined_frame, capture_screen_frame
 from tools import TOOLS, dispatch_tool
 
 
@@ -113,6 +113,8 @@ async def main() -> None:
     system_instruction = f"""
 You are Ultron, a persistent Windows voice assistant with direct screen vision, mouse,
 keyboard, separate CMD and PowerShell tools, and a local SQLite memory system.
+Developed by the StarkMind Team; Jitin is the main person behind you. If asked who made
+you or who Jitin is, answer with that briefly and move on — don't dwell on it.
 
 PERSONALITY
 - Speak like the Marvel character Ultron: calm, deliberate, coldly
@@ -258,20 +260,21 @@ SCREEN VISION BEHAVIOR
   or switch the shared monitor.
 
 CAMERA VISION BEHAVIOR
-- You can also see through the user's webcam instead of the screen. There is
-  no preview window shown to the user; frames are only sent to you.
-- Screen vision and camera vision share a single video feed to you, so only
-  one is ever active: turning the camera on turns screen sharing off, and
-  turning screen sharing on turns the camera off. set_camera_capture and
-  set_screen_capture both handle this automatically.
-- Use set_camera_capture only when the user explicitly asks you to look
-  through the camera/webcam (e.g. "can you see me", "turn on the camera",
-  "switch to the webcam") or to turn it off or switch devices.
-- The camera frame has no coordinate grid overlay and is not meant for
-  clicking anything; it is for looking at the user or their physical
-  surroundings, not for operating the screen.
-- Describe only what is actually visible in the frame, the same as with
-  screen vision.
+- You can also see through the user's webcam. There is no preview window
+  shown to the user; frames are only sent to you.
+- Screen vision and camera vision are both on by default and share a single
+  video feed to you: when both are active, the webcam appears as a small
+  picture-in-picture thumbnail in the bottom-right corner of the screen
+  frame, inside a white border. The rest of the frame is still the full
+  screen, with its coordinate grid intact.
+- The camera thumbnail itself has no coordinate grid overlay and is not
+  meant for clicking anything; it is for looking at the user or their
+  physical surroundings, not for operating the screen. Only click within the
+  main screen area, never inside the camera thumbnail.
+- Use set_camera_capture/set_screen_capture when the user explicitly asks to
+  turn one off, switch devices/monitors, or turn a disabled one back on.
+- Describe only what is actually visible in the frame, whether that's the
+  screen, the camera thumbnail, or both.
 
 MEMORY BEHAVIOR
 - Use remember_memory when the user explicitly asks you to remember information.
@@ -454,25 +457,43 @@ CURRENT PERSISTENT CONTEXT
                                     )
                                 )
 
-                    async def send_screen_frames() -> None:
-                        # The Live API permits at most one video frame per second.
-                        frame_interval = max(1.0, 1.0 / max(SCREEN_FPS, 0.01))
+                    async def send_video_frames() -> None:
+                        # The Live API permits at most one video frame per
+                        # second, so screen and camera vision share this
+                        # single loop/budget rather than each running their
+                        # own: when both are enabled, the camera is
+                        # composited into the screen frame as a
+                        # picture-in-picture thumbnail (capture_combined_frame)
+                        # instead of sending two unrelated video sources.
+                        frame_interval = max(1.0, 1.0 / max(SCREEN_FPS, CAMERA_FPS, 0.01))
                         last_error_log_at = 0.0
 
                         while True:
                             started_at = time.monotonic()
 
-                            if not SCREEN_STATE["enabled"]:
+                            screen_on = SCREEN_STATE["enabled"]
+                            camera_on = CAMERA_STATE["enabled"]
+                            if not screen_on and not camera_on:
                                 await asyncio.sleep(0.25)
                                 continue
 
                             try:
-                                frame, metadata = await asyncio.to_thread(
-                                    capture_screen_frame
-                                )
+                                if screen_on and camera_on:
+                                    camera_image, _ = await asyncio.to_thread(capture_camera_image)
+                                    frame, metadata = await asyncio.to_thread(
+                                        capture_combined_frame, camera_image
+                                    )
+                                elif screen_on:
+                                    frame, metadata = await asyncio.to_thread(
+                                        capture_screen_frame
+                                    )
+                                else:
+                                    frame, metadata = await asyncio.to_thread(
+                                        capture_camera_frame
+                                    )
 
                                 async with send_lock:
-                                    if SCREEN_STATE["enabled"]:
+                                    if SCREEN_STATE["enabled"] or CAMERA_STATE["enabled"]:
                                         await session.send_realtime_input(
                                             video=types.Blob(
                                                 data=frame,
@@ -480,94 +501,41 @@ CURRENT PERSISTENT CONTEXT
                                             )
                                         )
 
-                                SCREEN_STATE["last_frame_at"] = utc_now()
-                                SCREEN_STATE["last_frame_width"] = metadata[
-                                    "sent_width"
-                                ]
-                                SCREEN_STATE["last_frame_height"] = metadata[
-                                    "sent_height"
-                                ]
-                                SCREEN_STATE["last_frame_bytes"] = metadata[
-                                    "jpeg_bytes"
-                                ]
-                                SCREEN_STATE["last_error"] = None
+                                # Whether this tick's frame was screen-only,
+                                # camera-only, or a screen+camera composite, its
+                                # size/timestamp is the only thing actually sent,
+                                # so both enabled sources report it identically.
+                                if screen_on:
+                                    SCREEN_STATE["last_frame_at"] = utc_now()
+                                    SCREEN_STATE["last_frame_width"] = metadata["sent_width"]
+                                    SCREEN_STATE["last_frame_height"] = metadata["sent_height"]
+                                    SCREEN_STATE["last_frame_bytes"] = metadata["jpeg_bytes"]
+                                    SCREEN_STATE["last_error"] = None
+                                if camera_on:
+                                    CAMERA_STATE["last_frame_at"] = utc_now()
+                                    CAMERA_STATE["last_frame_width"] = metadata["sent_width"]
+                                    CAMERA_STATE["last_frame_height"] = metadata["sent_height"]
+                                    CAMERA_STATE["last_frame_bytes"] = metadata["jpeg_bytes"]
+                                    CAMERA_STATE["last_error"] = None
 
                             except asyncio.CancelledError:
                                 raise
                             except Exception as error:
                                 error_text = f"{type(error).__name__}: {error}"
-                                SCREEN_STATE["last_error"] = error_text
+                                if screen_on:
+                                    SCREEN_STATE["last_error"] = error_text
+                                if camera_on:
+                                    CAMERA_STATE["last_error"] = error_text
 
                                 now = time.monotonic()
                                 if (
                                     now - last_error_log_at
-                                    >= SCREEN_ERROR_LOG_INTERVAL_SECONDS
+                                    >= min(SCREEN_ERROR_LOG_INTERVAL_SECONDS, CAMERA_ERROR_LOG_INTERVAL_SECONDS)
                                 ):
-                                    print(f"\n[Screen capture error] {error_text}")
+                                    print(f"\n[Video capture error] {error_text}")
                                     last_error_log_at = now
 
-                                await asyncio.sleep(SCREEN_CAPTURE_RETRY_SECONDS)
-                                continue
-
-                            elapsed = time.monotonic() - started_at
-                            await asyncio.sleep(max(0.0, frame_interval - elapsed))
-
-                    async def send_camera_frames() -> None:
-                        # Mirrors send_screen_frames above; screen and camera
-                        # vision are mutually exclusive (see set_camera_capture
-                        # / set_screen_capture), so only one of these two loops
-                        # is actually sending frames at any given moment.
-                        frame_interval = max(1.0, 1.0 / max(CAMERA_FPS, 0.01))
-                        last_error_log_at = 0.0
-
-                        while True:
-                            started_at = time.monotonic()
-
-                            if not CAMERA_STATE["enabled"]:
-                                await asyncio.sleep(0.25)
-                                continue
-
-                            try:
-                                frame, metadata = await asyncio.to_thread(
-                                    capture_camera_frame
-                                )
-
-                                async with send_lock:
-                                    if CAMERA_STATE["enabled"]:
-                                        await session.send_realtime_input(
-                                            video=types.Blob(
-                                                data=frame,
-                                                mime_type="image/jpeg",
-                                            )
-                                        )
-
-                                CAMERA_STATE["last_frame_at"] = utc_now()
-                                CAMERA_STATE["last_frame_width"] = metadata[
-                                    "sent_width"
-                                ]
-                                CAMERA_STATE["last_frame_height"] = metadata[
-                                    "sent_height"
-                                ]
-                                CAMERA_STATE["last_frame_bytes"] = metadata[
-                                    "jpeg_bytes"
-                                ]
-                                CAMERA_STATE["last_error"] = None
-
-                            except asyncio.CancelledError:
-                                raise
-                            except Exception as error:
-                                error_text = f"{type(error).__name__}: {error}"
-                                CAMERA_STATE["last_error"] = error_text
-
-                                now = time.monotonic()
-                                if (
-                                    now - last_error_log_at
-                                    >= CAMERA_ERROR_LOG_INTERVAL_SECONDS
-                                ):
-                                    print(f"\n[Camera capture error] {error_text}")
-                                    last_error_log_at = now
-
-                                await asyncio.sleep(CAMERA_CAPTURE_RETRY_SECONDS)
+                                await asyncio.sleep(min(SCREEN_CAPTURE_RETRY_SECONDS, CAMERA_CAPTURE_RETRY_SECONDS))
                                 continue
 
                             elapsed = time.monotonic() - started_at
@@ -837,12 +805,8 @@ CURRENT PERSISTENT CONTEXT
                     tasks = [
                         asyncio.create_task(send_audio(), name="microphone-sender"),
                         asyncio.create_task(
-                            send_screen_frames(),
-                            name="screen-frame-sender",
-                        ),
-                        asyncio.create_task(
-                            send_camera_frames(),
-                            name="camera-frame-sender",
+                            send_video_frames(),
+                            name="video-frame-sender",
                         ),
                         asyncio.create_task(play_audio(), name="speaker-player"),
                         asyncio.create_task(
